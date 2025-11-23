@@ -51,6 +51,7 @@ class Ctp500Printer < Formula
       IMPORTANT: First, enable the CUPS backend (requires sudo):
 
       sudo ln -sf #{libexec}/ctp500 /usr/libexec/cups/backend/ctp500
+      sudo chown root:wheel /usr/libexec/cups/backend/ctp500
       sudo chmod 755 /usr/libexec/cups/backend/ctp500
       sudo launchctl stop org.cups.cupsd
       sudo launchctl start org.cups.cupsd
