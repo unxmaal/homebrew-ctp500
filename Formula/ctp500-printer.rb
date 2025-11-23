@@ -39,26 +39,6 @@ class Ctp500Printer < Formula
     unless etc_config.exist?
       cp prefix/"etc/ctp500.conf.default", etc_config
     end
-
-    # Create symlink in CUPS backend directory
-    cups_backend_dir = Pathname.new("/usr/libexec/cups/backend")
-    if cups_backend_dir.exist?
-      cups_backend = cups_backend_dir/"ctp500"
-      unless cups_backend.exist?
-        ohai "Creating CUPS backend symlink..."
-        system "sudo", "ln", "-sf", libexec/"ctp500", cups_backend
-        system "sudo", "chmod", "0755", cups_backend
-      end
-    else
-      opoo "CUPS backend directory not found at #{cups_backend_dir}"
-      opoo "You may need to manually create a symlink:"
-      puts "  sudo ln -sf #{libexec}/ctp500 /usr/libexec/cups/backend/ctp500"
-    end
-
-    # Restart CUPS to pick up new backend
-    ohai "Restarting CUPS..."
-    system "sudo", "launchctl", "stop", "org.cups.cupsd"
-    system "sudo", "launchctl", "start", "org.cups.cupsd"
   end
 
   def caveats
@@ -67,6 +47,15 @@ class Ctp500Printer < Formula
 
       Setup Instructions:
       ===================
+
+      IMPORTANT: First, enable the CUPS backend (requires sudo):
+
+      sudo ln -sf #{libexec}/ctp500 /usr/libexec/cups/backend/ctp500
+      sudo chmod 755 /usr/libexec/cups/backend/ctp500
+      sudo launchctl stop org.cups.cupsd
+      sudo launchctl start org.cups.cupsd
+
+      Then configure your printer:
 
       1. Turn on your CTP500 printer's Bluetooth
 
