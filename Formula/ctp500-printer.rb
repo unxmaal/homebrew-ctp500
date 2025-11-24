@@ -2,33 +2,28 @@ class Ctp500Printer < Formula
   desc "CUPS printer driver for CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
   url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.1.0/ctp500-macos-cli-1.1.0.tar.gz"
-  sha256 "1e0b5d94d83223dafa3e08f8005820dac70e445f20b3b28634fad510d7351a59"
+  sha256 "dfadf3f0b2b244bc1a4875d8507af6d99909c69de13bd4b10e136fe96ea08061"
   license "MIT"
 
   depends_on :macos
   depends_on "python@3.11"
   depends_on "shunit2" => :build  # For running tests during install
 
-  resource "bleak" do
-    url "https://files.pythonhosted.org/packages/source/b/bleak/bleak-0.21.1.tar.gz"
-    sha256 "ec4a1a2772fb315b992cbaa1153070c7e26968a52b0e2727035f443a1af5c18f"
-  end
-
-  resource "pillow" do
-    url "https://files.pythonhosted.org/packages/source/P/Pillow/Pillow-10.1.0.tar.gz"
-    sha256 "e6bf8de6c36ed96c86ea3b6e1d5273c53f46ef518a062464cd7ef5dd2cf92e38"
-  end
-
   def install
     # Install Python script to libexec
     libexec.install "ctp500_ble_cli.py"
 
-    # Install Python dependencies
-    venv = virtualenv_create(libexec, "python3.11")
-    venv.pip_install resources
+    # Install dependencies directly
+    system Formula["python@3.11"].opt_bin/"pip3", "install",
+           "--target=#{libexec}/vendor", "bleak>=0.21.0", "pillow>=10.0.0"
 
-    # Create wrapper script that uses the virtualenv
-    (bin/"ctp500_ble_cli").write_env_script libexec/"ctp500_ble_cli.py", :PYTHONPATH => libexec/Language::Python.site_packages("python3.11")
+    # Create wrapper script that sets PYTHONPATH
+    (bin/"ctp500_ble_cli").write <<~EOS
+      #!/bin/bash
+      export PYTHONPATH="#{libexec}/vendor:$PYTHONPATH"
+      exec "#{Formula["python@3.11"].opt_bin}/python3" "#{libexec}/ctp500_ble_cli.py" "$@"
+    EOS
+    chmod 0755, bin/"ctp500_ble_cli"
 
     # Install backend script to libexec (CUPS backends dir)
     libexec.install "files/ctp500"
@@ -151,7 +146,8 @@ class Ctp500Printer < Formula
     assert_match "ctp500", output
 
     # Verify Python dependencies are installed
-    system libexec/"bin/python", "-c", "import bleak; import PIL"
+    ENV["PYTHONPATH"] = "#{libexec}/vendor"
+    system Formula["python@3.11"].opt_bin/"python3", "-c", "import bleak; import PIL"
 
     # Run unit tests for backend functions
     ENV["SHUNIT_COLOR"] = "none"
