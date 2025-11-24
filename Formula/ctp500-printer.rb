@@ -1,16 +1,34 @@
 class Ctp500Printer < Formula
   desc "CUPS printer driver for CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
-  url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.0.2/ctp500-macos-cli-1.0.2.tar.gz"
-  sha256 "d6b62e735e28188db1a3a1b23f16b3e128a7a699f52294d32a22d434d495341e"
+  url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.1.0/ctp500-macos-cli-1.1.0.tar.gz"
+  sha256 "1e0b5d94d83223dafa3e08f8005820dac70e445f20b3b28634fad510d7351a59"
   license "MIT"
 
   depends_on :macos
+  depends_on "python@3.11"
   depends_on "shunit2" => :build  # For running tests during install
 
+  resource "bleak" do
+    url "https://files.pythonhosted.org/packages/source/b/bleak/bleak-0.21.1.tar.gz"
+    sha256 "ec4a1a2772fb315b992cbaa1153070c7e26968a52b0e2727035f443a1af5c18f"
+  end
+
+  resource "pillow" do
+    url "https://files.pythonhosted.org/packages/source/P/Pillow/Pillow-10.1.0.tar.gz"
+    sha256 "e6bf8de6c36ed96c86ea3b6e1d5273c53f46ef518a062464cd7ef5dd2cf92e38"
+  end
+
   def install
-    # Install the CLI binary
-    bin.install "bin/ctp500_ble_cli"
+    # Install Python script to libexec
+    libexec.install "ctp500_ble_cli.py"
+
+    # Install Python dependencies
+    venv = virtualenv_create(libexec, "python3.11")
+    venv.pip_install resources
+
+    # Create wrapper script that uses the virtualenv
+    (bin/"ctp500_ble_cli").write_env_script libexec/"ctp500_ble_cli.py", :PYTHONPATH => libexec/Language::Python.site_packages("python3.11")
 
     # Install backend script to libexec (CUPS backends dir)
     libexec.install "files/ctp500"
@@ -90,7 +108,7 @@ class Ctp500Printer < Formula
 
       Advanced Usage:
       ===============
-      The CLI binary can also be used standalone:
+      The CLI tool can also be used standalone:
 
       # Print text
       #{bin}/ctp500_ble_cli text \\
@@ -105,6 +123,9 @@ class Ctp500Printer < Formula
       # Check printer status
       #{bin}/ctp500_ble_cli status --address BLE-ADDRESS
 
+      Note: This package uses Python #{Formula["python@3.11"].version} and installs
+      dependencies (bleak, pillow) in a dedicated virtual environment.
+
       Troubleshooting:
       ================
       - Check logs: tail -f /var/log/cups/error_log
@@ -116,8 +137,11 @@ class Ctp500Printer < Formula
   end
 
   test do
-    # Test that the binary exists and runs
+    # Test that the CLI wrapper exists and runs
     assert_match "usage:", shell_output("#{bin}/ctp500_ble_cli --help")
+
+    # Test that Python script exists
+    assert_predicate libexec/"ctp500_ble_cli.py", :exist?
 
     # Test that backend script exists and is executable
     assert_predicate libexec/"ctp500", :executable?
@@ -125,6 +149,9 @@ class Ctp500Printer < Formula
     # Test backend discovery mode
     output = shell_output("#{libexec}/ctp500")
     assert_match "ctp500", output
+
+    # Verify Python dependencies are installed
+    system libexec/"bin/python", "-c", "import bleak; import PIL"
 
     # Run unit tests for backend functions
     ENV["SHUNIT_COLOR"] = "none"
