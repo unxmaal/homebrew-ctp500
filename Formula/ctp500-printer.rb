@@ -2,7 +2,7 @@ class Ctp500Printer < Formula
   desc "CUPS printer driver for CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
   url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.1.0/ctp500-macos-cli-1.1.0.tar.gz"
-  sha256 "e1606e9b6e829ab61c93ac2bcad652d81a8b92b45d88e23ecba3eb4e26559e87"
+  sha256 "66d5443eba37d023815790f42a51c77d68213d5b745e9eb1fcb155fa70b20cc9"
   license "MIT"
 
   depends_on :macos
@@ -23,7 +23,7 @@ class Ctp500Printer < Formula
     (bin/"ctp500_ble_cli").write <<~EOS
       #!/bin/bash
       export PYTHONPATH="#{libexec}/vendor:$PYTHONPATH"
-      exec "#{Formula["python@3.11"].opt_bin}/python3" "#{libexec}/ctp500_ble_cli.py" "$@"
+      exec "#{Formula["python@3.11"].opt_bin}/python3.11" "#{libexec}/ctp500_ble_cli.py" "$@"
     EOS
     chmod 0755, bin/"ctp500_ble_cli"
 
@@ -149,7 +149,7 @@ class Ctp500Printer < Formula
 
     # Verify Python dependencies are installed
     ENV["PYTHONPATH"] = "#{libexec}/vendor"
-    system Formula["python@3.11"].opt_bin/"python3", "-c", "import bleak; import PIL"
+    system Formula["python@3.11"].opt_bin/"python3.11", "-c", "import bleak; import PIL"
 
     # Run unit tests for backend functions
     ENV["SHUNIT_COLOR"] = "none"
