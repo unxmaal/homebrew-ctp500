@@ -2,7 +2,7 @@ class Ctp500Printer < Formula
   desc "CUPS printer driver for CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
   url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.1.0/ctp500-macos-cli-1.1.0.tar.gz"
-  sha256 "def4c124d4337d0b8f484b3304cc12c3e6752180dcfc3fad984a780fd8c193f0"
+  sha256 "e1606e9b6e829ab61c93ac2bcad652d81a8b92b45d88e23ecba3eb4e26559e87"
   license "MIT"
 
   depends_on :macos
@@ -15,7 +15,7 @@ class Ctp500Printer < Formula
 
     # Create vendor directory and install dependencies
     (libexec/"vendor").mkpath
-    system Formula["python@3.11"].opt_bin/"pip3", "install",
+    system Formula["python@3.11"].opt_bin/"pip3.11", "install",
            "--target=#{libexec}/vendor", "--no-warn-script-location",
            "bleak==0.21.1", "pillow==10.1.0"
 
