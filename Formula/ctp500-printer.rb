@@ -2,30 +2,15 @@ class Ctp500Printer < Formula
   desc "CUPS printer driver for CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
   url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.1.0/ctp500-macos-cli-1.1.0.tar.gz"
-  sha256 "66d5443eba37d023815790f42a51c77d68213d5b745e9eb1fcb155fa70b20cc9"
+  sha256 "edbc1d9d9d32833907b78128ac78a9c2df73e014c74c76c64a3a794e30cbd04a"
   license "MIT"
 
   depends_on :macos
-  depends_on "python@3.11"
   depends_on "shunit2" => :build  # For running tests during install
 
   def install
-    # Install Python script to libexec
-    libexec.install "ctp500_ble_cli.py"
-
-    # Create vendor directory and install dependencies
-    (libexec/"vendor").mkpath
-    system Formula["python@3.11"].opt_bin/"pip3.11", "install",
-           "--target=#{libexec}/vendor", "--no-warn-script-location",
-           "bleak==0.21.1", "pillow==10.1.0"
-
-    # Create wrapper script that sets PYTHONPATH
-    (bin/"ctp500_ble_cli").write <<~EOS
-      #!/bin/bash
-      export PYTHONPATH="#{libexec}/vendor:$PYTHONPATH"
-      exec "#{Formula["python@3.11"].opt_bin}/python3.11" "#{libexec}/ctp500_ble_cli.py" "$@"
-    EOS
-    chmod 0755, bin/"ctp500_ble_cli"
+    # Install pre-built binary
+    bin.install "bin/ctp500_ble_cli"
 
     # Install backend script to libexec (CUPS backends dir)
     libexec.install "files/ctp500"
@@ -54,6 +39,31 @@ class Ctp500Printer < Formula
     unless etc_config.exist?
       cp prefix/"etc/ctp500.conf.default", etc_config
     end
+
+    # MANDATORY: Install CUPS backend with correct permissions
+    backend_source = libexec/"ctp500"
+    backend_dest = "/usr/libexec/cups/backend/ctp500"
+
+    unless backend_source.exist?
+      opoo "Backend binary not found at #{backend_source}"
+      return
+    end
+
+    # Create symlink to backend
+    system "sudo", "ln", "-sf", backend_source.to_s, backend_dest
+
+    # Set correct ownership and permissions (CRITICAL for CUPS)
+    # IMPORTANT: Must be root:_lp (the CUPS backend user), NOT root:wheel
+    system "sudo", "chown", "root:_lp", backend_dest
+    system "sudo", "chmod", "755", backend_dest
+
+    # Reload CUPS daemon to recognize new backend
+    system "sudo", "launchctl", "stop", "org.cups.cupsd"
+    system "sudo", "launchctl", "start", "org.cups.cupsd"
+
+    puts "✔ CUPS backend installed to #{backend_dest}"
+    puts "✔ Ownership: root:_lp, Permissions: 755"
+    puts "✔ CUPS daemon restarted"
   end
 
   def caveats
@@ -120,8 +130,8 @@ class Ctp500Printer < Formula
       # Check printer status
       #{bin}/ctp500_ble_cli status --address BLE-ADDRESS
 
-      Note: This package uses Python #{Formula["python@3.11"].version} and installs
-      dependencies (bleak, pillow) in a dedicated virtual environment.
+      Note: This package uses a PyInstaller binary with deep code signing
+      and Bluetooth entitlements for CUPS daemon compatibility.
 
       Troubleshooting:
       ================
@@ -134,11 +144,8 @@ class Ctp500Printer < Formula
   end
 
   test do
-    # Test that the CLI wrapper exists and runs
+    # Test that the binary exists and runs
     assert_match "usage:", shell_output("#{bin}/ctp500_ble_cli --help")
-
-    # Test that Python script exists
-    assert_predicate libexec/"ctp500_ble_cli.py", :exist?
 
     # Test that backend script exists and is executable
     assert_predicate libexec/"ctp500", :executable?
@@ -146,10 +153,6 @@ class Ctp500Printer < Formula
     # Test backend discovery mode
     output = shell_output("#{libexec}/ctp500")
     assert_match "ctp500", output
-
-    # Verify Python dependencies are installed
-    ENV["PYTHONPATH"] = "#{libexec}/vendor"
-    system Formula["python@3.11"].opt_bin/"python3.11", "-c", "import bleak; import PIL"
 
     # Run unit tests for backend functions
     ENV["SHUNIT_COLOR"] = "none"
