@@ -9,11 +9,11 @@ class Ctp500Printer < Formula
   depends_on "shunit2" => :build  # For running tests during install
 
   def install
-    # Install pre-built binary
+    # Install pre-built binary as CLI tool
     bin.install "bin/ctp500_ble_cli"
 
-    # Install backend script to libexec (CUPS backends dir)
-    libexec.install "files/ctp500"
+    # Install binary as CUPS backend (NO shell wrapper - binary is the backend)
+    libexec.install "bin/ctp500_ble_cli" => "ctp500"
 
     # Install helper functions
     (share/"ctp500").install "files/backend_functions.sh"
@@ -54,15 +54,20 @@ class Ctp500Printer < Formula
 
     # Set correct ownership and permissions (CRITICAL for CUPS)
     # IMPORTANT: Must be root:_lp (the CUPS backend user), NOT root:wheel
+    # Use 700 permissions (safer for SIP/CUPS sandbox)
     system "sudo", "chown", "root:_lp", backend_dest
-    system "sudo", "chmod", "755", backend_dest
+    system "sudo", "chmod", "700", backend_dest
+
+    # Remove extended attributes that block CUPS execution
+    system "sudo", "xattr", "-c", backend_dest
 
     # Reload CUPS daemon to recognize new backend
     system "sudo", "launchctl", "stop", "org.cups.cupsd"
     system "sudo", "launchctl", "start", "org.cups.cupsd"
 
     puts "✔ CUPS backend installed to #{backend_dest}"
-    puts "✔ Ownership: root:_lp, Permissions: 755"
+    puts "✔ Ownership: root:_lp, Permissions: 700"
+    puts "✔ Extended attributes removed"
     puts "✔ CUPS daemon restarted"
   end
 
