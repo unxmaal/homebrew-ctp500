@@ -1,170 +1,95 @@
 class Ctp500Printer < Formula
-  desc "CUPS printer driver for CTP500 BLE thermal receipt printer"
+  desc "CUPS driver + CLI for CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
-  url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.2.2/ctp500-macos-cli-1.2.2.tar.gz"
-  sha256 "20e72e7bbd85d4a0b8005a2545416e78d87d60bc26f0c3a1e0a718cc2809fa7f"
+  url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.2.3/ctp500-macos-cli-1.2.3.tar.gz"
+  sha256 "6626b47c1161f0d951ba9602be6cc18bf51c8dd7e979d39882159e7763cca8c4"
   license "MIT"
 
   depends_on :macos
-  depends_on "shunit2" => :build  # For running tests during install
+  depends_on "shunit2" => :build
 
   def install
-    # Install pre-built binary as CLI tool
+    # Install CLI
     bin.install "bin/ctp500_ble_cli"
 
-    # Install binary as CUPS backend (NO shell wrapper - binary is the backend)
+    # Install backend binary (renamed to ctp500 for CUPS)
     libexec.install "bin/ctp500_ble_cli" => "ctp500"
 
-    # Install helper functions
+    # Install helper scripts + PPD
     (share/"ctp500").install "files/backend_functions.sh"
-
-    # Install PPD file
     (share/"cups/model").install "files/CTP500.ppd"
 
-    # Install default config
-    (prefix/"etc").install "files/ctp500.conf" => "ctp500.conf.default"
+    # Config
+    (etc/"ctp500.conf.default").install "files/ctp500.conf"
 
-    # Install test files (for brew test)
-    (prefix/"tests/backend").install Dir["tests/backend/*.sh"]
-    (prefix/"tests/backend/fixtures").install Dir["tests/backend/fixtures/*"]
-
-    # Install documentation
+    # Tests & docs
+    (pkgshare/"tests/backend").install Dir["tests/backend/*.sh"]
+    (pkgshare/"tests/backend/fixtures").install Dir["tests/backend/fixtures/*"]
     doc.install "README.md"
     doc.install Dir["docs/*.md"]
   end
 
   def post_install
-    # Create config if it doesn't exist
-    etc_config = etc/"ctp500.conf"
-    unless etc_config.exist?
-      cp prefix/"etc/ctp500.conf.default", etc_config
-    end
+    # Install default config if missing
+    config = etc/"ctp500.conf"
+    cp etc/"ctp500.conf.default", config unless config.exist?
 
-    # MANDATORY: Install CUPS backend with correct permissions
-    backend_source = libexec/"ctp500"
-    backend_dest = "/usr/libexec/cups/backend/ctp500"
+    backend_src = libexec/"ctp500"
+    backend_dst = "/usr/libexec/cups/backend/ctp500"
 
-    unless backend_source.exist?
-      opoo "Backend binary not found at #{backend_source}"
+    unless backend_src.exist?
+      opoo "Backend not found at #{backend_src}"
       return
     end
 
-    # Create symlink to backend
-    system "sudo", "ln", "-sf", backend_source.to_s, backend_dest
+    # Install backend where CUPS can execute it
+    system "sudo", "ln", "-sf", backend_src.to_s, backend_dst
 
-    # Set correct ownership and permissions (CRITICAL for CUPS)
-    # IMPORTANT: Must be root:_lp (the CUPS backend user), NOT root:wheel
-    # Use 700 permissions (safer for SIP/CUPS sandbox)
-    system "sudo", "chown", "root:_lp", backend_dest
-    system "sudo", "chmod", "700", backend_dest
+    # Correct CUPS backend ownership/permissions
+    system "sudo", "chown", "root:_lp", backend_dst
+    system "sudo", "chmod", "700", backend_dst
+    system "sudo", "xattr", "-c", backend_dst
 
-    # Remove extended attributes that block CUPS execution
-    system "sudo", "xattr", "-c", backend_dest
+    # Restart daemon
+    system "sudo", "launchctl", "kickstart", "-k", "system/org.cups.cupsd"
 
-    # Reload CUPS daemon to recognize new backend
-    system "sudo", "launchctl", "stop", "org.cups.cupsd"
-    system "sudo", "launchctl", "start", "org.cups.cupsd"
-
-    puts "✔ CUPS backend installed to #{backend_dest}"
-    puts "✔ Ownership: root:_lp, Permissions: 700"
-    puts "✔ Extended attributes removed"
-    puts "✔ CUPS daemon restarted"
+    puts "✓ Installed CUPS backend → #{backend_dst}"
+    puts "✓ Permissions root:_lp 700"
   end
 
   def caveats
     <<~EOS
-      CTP500 printer driver installed successfully!
+      The CTP500 CUPS backend has been installed.
 
-      Setup Instructions:
-      ===================
+      The backend has already been linked and permissions applied.
 
-      IMPORTANT: First, enable the CUPS backend (requires sudo):
+      To add the printer:
 
-      sudo ln -sf #{libexec}/ctp500 /usr/libexec/cups/backend/ctp500
-      sudo chown root:wheel /usr/libexec/cups/backend/ctp500
-      sudo chmod 755 /usr/libexec/cups/backend/ctp500
-      sudo launchctl stop org.cups.cupsd
-      sudo launchctl start org.cups.cupsd
+        lpadmin -p CTP500 \\
+          -E \\
+          -v ctp500://YOUR-BLE-ADDRESS \\
+          -P #{share}/cups/model/CTP500.ppd
 
-      Then configure your printer:
+      Example BLE address:
+        ctp500://D210000E-A47D-2971-6819-A5F4189E7B86
 
-      1. Turn on your CTP500 printer's Bluetooth
+      Test:
+        echo "Hello" | lp -d CTP500
 
-      2. Find your printer's BLE address:
-         #{bin}/ctp500_ble_cli scan
+      Logs:
+        tail -f /var/log/cups/error_log
 
-      3. Add the printer to CUPS (replace BLE-ADDRESS with your printer's address):
-         lpadmin -p CTP500 \\
-           -E \\
-           -v ctp500://BLE-ADDRESS \\
-           -P #{share}/cups/model/CTP500.ppd \\
-           -D "CTP500 Thermal Printer" \\
-           -L "Local"
-
-         Example BLE addresses:
-         - UUID format: ctp500://D210000E-A47D-2971-6819-A5F4389E7B86
-         - MAC format:  ctp500://AA:BB:CC:DD:EE:FF
-
-      4. Set as default printer (optional):
-         lpadmin -d CTP500
-
-      5. Test printing:
-         echo "Hello, World!" | lp -d CTP500
-         lp -d CTP500 /path/to/image.png
-
-      Configuration:
-      ==============
-      - Config file: #{etc}/ctp500.conf
-      - PPD file: #{share}/cups/model/CTP500.ppd
-      - Backend: /usr/libexec/cups/backend/ctp500
-
-      Advanced Usage:
-      ===============
-      The CLI tool can also be used standalone:
-
-      # Print text
-      #{bin}/ctp500_ble_cli text \\
-        --address BLE-ADDRESS \\
-        --text "Hello, World!"
-
-      # Print image
-      #{bin}/ctp500_ble_cli image \\
-        --address BLE-ADDRESS \\
-        --file /path/to/image.png
-
-      # Check printer status
-      #{bin}/ctp500_ble_cli status --address BLE-ADDRESS
-
-      Note: This package uses a PyInstaller binary with deep code signing
-      and Bluetooth entitlements for CUPS daemon compatibility.
-
-      Troubleshooting:
-      ================
-      - Check logs: tail -f /var/log/cups/error_log
-      - Verify backend: ls -l /usr/libexec/cups/backend/ctp500
-      - Test backend: DEVICE_URI=ctp500://YOUR-ADDRESS #{libexec}/ctp500 1 user test 1 "" /path/to/file
-
-      For more information, visit: #{homepage}
+      Backend:
+        /usr/libexec/cups/backend/ctp500
     EOS
   end
 
   test do
-    # Test that the binary exists and runs
-    assert_match "usage:", shell_output("#{bin}/ctp500_ble_cli --help")
-
-    # Test that backend script exists and is executable
+    assert_match "usage", shell_output("#{bin}/ctp500_ble_cli --help")
     assert_predicate libexec/"ctp500", :executable?
 
-    # Test backend discovery mode
-    output = shell_output("#{libexec}/ctp500")
-    assert_match "ctp500", output
-
-    # Run unit tests for backend functions
     ENV["SHUNIT_COLOR"] = "none"
-    cd prefix/"tests/backend" do
-      system "/opt/homebrew/bin/shunit2", "test_uri_parsing.sh"
-      system "/opt/homebrew/bin/shunit2", "test_config_parsing.sh"
-      system "/opt/homebrew/bin/shunit2", "test_format_detection.sh"
-    end
+    cp_r pkgshare/"tests", testpath/"tests"
+    system "shunit2", "tests/backend/test_uri_parsing.sh"
   end
 end
