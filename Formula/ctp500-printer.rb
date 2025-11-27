@@ -2,7 +2,7 @@ class Ctp500Printer < Formula
   desc "CUPS printer driver for CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
   url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.2.5/ctp500-macos-cli-1.2.5.tar.gz"
-  sha256 "cd56d760254db0bcada3ee906d576bdbfabf268820efa63cfa446d0001bc2137"
+  sha256 "0796bb662d51e51297149ee16558374119b7cb3a9748dff9c02187bb5817123a"
   license "MIT"
 
   depends_on :macos
@@ -12,8 +12,8 @@ class Ctp500Printer < Formula
     # CLI binary
     bin.install "bin/ctp500_ble_cli"
 
-    # CUPS backend binary - install to libexec for manual linking
-    libexec.install "bin/ctp500_ble_cli" => "ctp500"
+    # CUPS backend binary (separate file from CLI)
+    libexec.install "files/ctp500"
 
     # Helper functions
     (share/"ctp500").install "files/backend_functions.sh"
@@ -22,7 +22,11 @@ class Ctp500Printer < Formula
     (share/"cups/model").install "files/CTP500.ppd"
 
     # Default config
-    (etc/"ctp500.conf.default").write (buildpath/"files/ctp500.conf").read
+    (share/"ctp500").install "files/ctp500.conf" => "ctp500.conf.default"
+
+    # Test files (needed for brew test)
+    (share/"ctp500/tests/backend").install Dir["tests/backend/*.sh"]
+    (share/"ctp500/tests/backend/fixtures").install Dir["tests/backend/fixtures/*"]
 
     # Docs
     doc.install "README.md"
@@ -30,10 +34,9 @@ class Ctp500Printer < Formula
   end
 
   def post_install
-    # Create user config if it doesn't exist (within Homebrew-managed etc)
     config_file = etc/"ctp500.conf"
-    default_config = etc/"ctp500.conf.default"
-    
+    default_config = share/"ctp500/ctp500.conf.default"
+
     unless config_file.exist?
       config_file.write default_config.read if default_config.exist?
     end
@@ -41,9 +44,7 @@ class Ctp500Printer < Formula
 
   def caveats
     <<~EOS
-      To complete installation, you must manually install the CUPS backend.
-      
-      Run the following commands:
+      To complete installation, manually install the CUPS backend:
 
         sudo ln -sf #{libexec}/ctp500 /usr/libexec/cups/backend/ctp500
         sudo chown root:_lp /usr/libexec/cups/backend/ctp500
@@ -63,28 +64,20 @@ class Ctp500Printer < Formula
           -D "CTP500 Thermal Printer" \\
           -L "Local"
 
-      Configuration file location: #{etc}/ctp500.conf
+      Configuration: #{etc}/ctp500.conf
     EOS
   end
 
   test do
-    # Test CLI help
-    assert_match "usage", shell_output("#{bin}/ctp500_ble_cli --help", 0)
+    assert_match "usage", shell_output("#{bin}/ctp500_ble_cli --help")
 
-    # Test backend binary exists and is executable
     assert_predicate libexec/"ctp500", :executable?
 
-    # Test backend outputs expected content (adjust expected exit code if needed)
     output = shell_output("#{libexec}/ctp500 2>&1", 1)
     assert_match "ctp500", output
 
-    # Run unit tests
     ENV["SHUNIT_COLOR"] = "none"
-    
-    # Copy test files to testpath since we can't modify prefix
-    cp_r prefix/"tests/backend", testpath
-    
-    cd testpath/"backend" do
+    cd share/"ctp500/tests/backend" do
       system Formula["shunit2"].opt_bin/"shunit2", "test_uri_parsing.sh"
       system Formula["shunit2"].opt_bin/"shunit2", "test_config_parsing.sh"
       system Formula["shunit2"].opt_bin/"shunit2", "test_format_detection.sh"
