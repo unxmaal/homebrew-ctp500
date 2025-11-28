@@ -8,21 +8,19 @@ class Ctp500Printer < Formula
   depends_on :macos
 
   def install
-    # The tarball contains a top-level directory: ctp500-macos-cli-#{version}
-    cd "ctp500-macos-cli-#{version}" do
-      # CLI binary
-      bin.install "bin/ctp500_ble_cli"
+    # Homebrew automatically extracts the tarball and cds into it
+    # CLI binary
+    bin.install "bin/ctp500_ble_cli"
 
-      # Backend binary (used by CUPS)
-      libexec.install "bin/ctp500_ble_cli" => "ctp500"
+    # Backend binary (used by CUPS)
+    libexec.install "bin/ctp500_ble_cli" => "ctp500"
 
-      # Support files
-      (share/"ctp500").install "files/backend_functions.sh"
-      (share/"cups/model").install "files/CTP500.ppd"
+    # Support files
+    (share/"ctp500").install "files/backend_functions.sh"
+    (share/"cups/model").install "files/CTP500.ppd"
 
-      # Config lives under Homebrew etc, not /etc
-      (etc/"ctp500").install "files/ctp500.conf"
-    end
+    # Config lives under Homebrew etc, not /etc
+    (etc/"ctp500").install "files/ctp500.conf"
   end
 
   def caveats
