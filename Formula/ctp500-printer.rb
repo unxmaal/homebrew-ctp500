@@ -11,11 +11,13 @@ class Ctp500Printer < Formula
     # Clear quarantine attributes
     system "xattr", "-cr", "."
 
-    bin.install "bin/ctp500_ble_cli"
-    libexec.install "bin/ctp500_ble_cli" => "ctp500"
-    (share/"ctp500").install "files/backend_functions.sh"
-    (share/"cups/model").install "files/CTP500.ppd"
-    (etc/"ctp500").install "files/ctp500.conf"
+    cd "ctp500-macos-cli-#{version}" do
+      bin.install "bin/ctp500_ble_cli"
+      libexec.install "bin/ctp500_ble_cli" => "ctp500"
+      (share/"ctp500").install "files/backend_functions.sh"
+      (share/"cups/model").install "files/CTP500.ppd"
+      (etc/"ctp500").install "files/ctp500.conf"
+    end
   end
 
   def caveats
