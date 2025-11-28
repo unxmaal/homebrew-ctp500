@@ -8,6 +8,9 @@ class Ctp500Printer < Formula
   depends_on :macos
 
   def install
+    # Clear quarantine attributes
+    system "xattr", "-cr", "."
+
     bin.install "bin/ctp500_ble_cli"
     libexec.install "bin/ctp500_ble_cli" => "ctp500"
     (share/"ctp500").install "files/backend_functions.sh"
