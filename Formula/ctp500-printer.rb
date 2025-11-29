@@ -8,16 +8,18 @@ class Ctp500Printer < Formula
   depends_on :macos
 
   def install
-    # Clear quarantine attributes
-    system "xattr", "-cr", "."
+    # Install support files first
+    (share/"ctp500").install "files/backend_functions.sh"
+    (share/"cups/model").install "files/CTP500.ppd"
+    (etc/"ctp500").install "files/ctp500.conf"
 
-    cd "ctp500-macos-cli-#{version}" do
-      bin.install "bin/ctp500_ble_cli"
-      libexec.install "bin/ctp500_ble_cli" => "ctp500"
-      (share/"ctp500").install "files/backend_functions.sh"
-      (share/"cups/model").install "files/CTP500.ppd"
-      (etc/"ctp500").install "files/ctp500.conf"
-    end
+    # Install binary directly using system commands
+    system "mkdir", "-p", bin
+    system "mkdir", "-p", libexec
+    system "cp", "bin/ctp500_ble_cli", "#{bin}/ctp500_ble_cli"
+    system "cp", "bin/ctp500_ble_cli", "#{libexec}/ctp500"
+    system "chmod", "755", "#{bin}/ctp500_ble_cli"
+    system "chmod", "755", "#{libexec}/ctp500"
   end
 
   def caveats
