@@ -1,41 +1,38 @@
 class Ctp500Printer < Formula
-  desc "CUPS backend + CLI for the CTP500 BLE thermal receipt printer"
+  desc "CUPS backend for the CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
-  url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.3.1/ctp500-macos-cli-1.3.1.tar.gz"
-  sha256 "ca3c564df3fcdac10c129b98f4d65799ff96f83da543eae2d55df2efebb9aa7a"
+  url "https://github.com/unxmaal/ctp500-macos-cli/archive/refs/tags/v1.4.0.tar.gz"
+  sha256 "685416ce215eaa407640ea35fbf585f3ce2be1100c86e9da47d9c086680bbf2c"
   license "MIT"
 
   depends_on :macos
+  depends_on "python@3.11"
 
   def install
-    # Install support files first
-    (share/"ctp500").install "files/backend_functions.sh"
+    # Install Python dependencies to lib/python3.11/site-packages
+    ENV.prepend_create_path "PYTHONPATH", lib/"python3.11/site-packages"
+    system "python3.11", "-m", "pip", "install", "--target=#{lib}/python3.11/site-packages",
+           "bleak>=0.21.0", "pillow>=10.0.0"
+
+    # Install support files
     (share/"cups/model").install "files/CTP500.ppd"
     (etc/"ctp500").install "files/ctp500.conf"
 
-    # Install binary and backend using system commands
-    system "mkdir", "-p", bin
-    system "mkdir", "-p", libexec
-    system "cp", "bin/ctp500_ble_cli", "#{bin}/ctp500_ble_cli"
-    system "cp", "files/ctp500", "#{libexec}/ctp500"
-    system "chmod", "755", "#{bin}/ctp500_ble_cli"
-    system "chmod", "755", "#{libexec}/ctp500"
+    # Install Python backend script
+    (libexec).install "files/ctp500.py" => "ctp500"
+    chmod 0755, libexec/"ctp500"
   end
 
   def caveats
     <<~EOS
-      CUPS backend is not auto-installed
-      ==================================
+      CUPS backend setup
+      ==================
 
-      Homebrew is not allowed to modify system locations like:
-        /usr/libexec/cups/backend
-
-      To enable the CTP500 backend for CUPS, you must install it manually:
+      To enable the CTP500 backend for CUPS:
 
         sudo ln -sf #{opt_prefix}/libexec/ctp500 /usr/libexec/cups/backend/ctp500
-        sudo chown root:_lp /usr/libexec/cups/backend/ctp500   # use 'lp' instead of '_lp' if your system does
-        sudo chmod 700 /usr/libexec/cups/backend/ctp500
-        sudo xattr -c /usr/libexec/cups/backend/ctp500
+        sudo chown root:_lp /usr/libexec/cups/backend/ctp500
+        sudo chmod 755 /usr/libexec/cups/backend/ctp500
         sudo launchctl kickstart -k system/org.cups.cupsd
 
       Add the printer (replace BLE-ADDRESS with your printer's UUID or MAC):
@@ -51,11 +48,6 @@ class Ctp500Printer < Formula
       Configuration file:
         #{etc}/ctp500/ctp500.conf
 
-      CLI usage (works without CUPS):
-        #{bin}/ctp500_ble_cli scan
-        #{bin}/ctp500_ble_cli text  --address BLE-ADDRESS --text "hello world"
-        #{bin}/ctp500_ble_cli image --address BLE-ADDRESS --file /path/to/image.png
-
       If CUPS jobs fail:
         - Check the CUPS log:  tail -f /var/log/cups/error_log
         - Test the backend directly:
@@ -65,10 +57,10 @@ class Ctp500Printer < Formula
   end
 
   test do
-    # Basic help output check
-    assert_match "usage", shell_output("#{bin}/ctp500_ble_cli --help")
-
-    # Backend binary is present in libexec
+    # Backend script is present in libexec
     assert_predicate libexec/"ctp500", :exist?
+
+    # Backend responds to discovery mode
+    assert_match "ctp500", shell_output("#{libexec}/ctp500")
   end
 end
