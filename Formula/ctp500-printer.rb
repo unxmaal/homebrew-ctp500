@@ -59,3 +59,4 @@ class Ctp500Printer < Formula
     assert_match "ctp500", shell_output("#{libexec}/ctp500")
   end
 end
+
