@@ -1,77 +1,61 @@
 class Ctp500Printer < Formula
-  desc "CUPS backend + CLI for the CTP500 BLE thermal receipt printer"
+  desc "CUPS backend for the CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
-  url "https://github.com/unxmaal/ctp500-macos-cli/releases/download/v1.2.6/ctp500-macos-cli-1.2.6.tar.gz"
-  sha256 "3880b9c9b9454d83d5b6b31b73dfb64a294c08ea402acbabe4f613b382ad3b62"
+  url "https://github.com/unxmaal/ctp500-macos-cli/archive/refs/tags/v1.4.2.tar.gz"
+  sha256 "5ea2a6c8206e634420a19263edf4326ef15f93e1e83aa86032ed12001c62de58"
   license "MIT"
 
   depends_on :macos
+  depends_on "python@3.11"
 
   def install
-    # The tarball contains a top-level directory: ctp500-macos-cli-#{version}
-    cd "ctp500-macos-cli-#{version}" do
-      # CLI binary
-      bin.install "bin/ctp500_ble_cli"
+    # Install Python deps into keg-local site-packages
+    ENV.prepend_create_path "PYTHONPATH", lib/"python3.11/site-packages"
+    system "python3.11", "-m", "pip", "install",
+           "--target=#{lib}/python3.11/site-packages",
+           "bleak>=0.21.0", "pillow>=10.0.0"
 
-      # Backend binary (used by CUPS)
-      libexec.install "bin/ctp500_ble_cli" => "ctp500"
+    # Install backend script
+    libexec.install "files/ctp500.py" => "ctp500"
+    chmod 0755, libexec/"ctp500"
 
-      # Support files
-      (share/"ctp500").install "files/backend_functions.sh"
-      (share/"cups/model").install "files/CTP500.ppd"
-
-      # Config lives under Homebrew etc, not /etc
-      (etc/"ctp500").install "files/ctp500.conf"
-    end
+    # Install PPD + config
+    (share/"cups/model").install "files/CTP500.ppd"
+    (etc/"ctp500").install "files/ctp500.conf"
   end
 
   def caveats
     <<~EOS
-      CUPS backend is not auto-installed
-      ==================================
+      CUPS backend setup
+      ==================
 
-      Homebrew is not allowed to modify system locations like:
-        /usr/libexec/cups/backend
+      Homebrew cannot install into /usr/libexec/cups/backend automatically.
 
-      To enable the CTP500 backend for CUPS, you must install it manually:
+      Install backend manually (must be a real file, not a symlink):
 
-        sudo ln -sf #{opt_prefix}/libexec/ctp500 /usr/libexec/cups/backend/ctp500
-        sudo chown root:_lp /usr/libexec/cups/backend/ctp500   # use 'lp' instead of '_lp' if your system does
-        sudo chmod 700 /usr/libexec/cups/backend/ctp500
+        sudo cp #{opt_libexec}/ctp500 /usr/libexec/cups/backend/ctp500
+        sudo chown root:_lp /usr/libexec/cups/backend/ctp500
+        sudo chmod 755 /usr/libexec/cups/backend/ctp500
         sudo xattr -c /usr/libexec/cups/backend/ctp500
         sudo launchctl kickstart -k system/org.cups.cupsd
 
-      Add the printer (replace BLE-ADDRESS with your printer's UUID or MAC):
+      Add the printer:
 
         lpadmin -p CTP500 -E \\
           -v ctp500://BLE-ADDRESS \\
           -P #{HOMEBREW_PREFIX}/share/cups/model/CTP500.ppd
 
-      Example BLE addresses:
-        UUID: ctp500://D210000E-A47D-2971-6819-A5F4189E7B86
-        MAC:  ctp500://AA:BB:CC:DD:EE:FF
-
-      Configuration file:
+      Config file:
         #{etc}/ctp500/ctp500.conf
 
-      CLI usage (works without CUPS):
-        #{bin}/ctp500_ble_cli scan
-        #{bin}/ctp500_ble_cli text  --address BLE-ADDRESS --text "hello world"
-        #{bin}/ctp500_ble_cli image --address BLE-ADDRESS --file /path/to/image.png
-
-      If CUPS jobs fail:
-        - Check the CUPS log:  tail -f /var/log/cups/error_log
-        - Test the backend directly:
-            DEVICE_URI=ctp500://BLE-ADDRESS \\
-              #{opt_prefix}/libexec/ctp500 1 user test 1 "" /path/to/file
+      Backend test:
+        DEVICE_URI=ctp500://BLE-ADDRESS \\
+          #{opt_libexec}/ctp500 1 user test 1 "" /path/to/file
     EOS
   end
 
   test do
-    # Basic help output check
-    assert_match "usage", shell_output("#{bin}/ctp500_ble_cli --help")
-
-    # Backend binary is present in libexec
     assert_predicate libexec/"ctp500", :exist?
+    assert_match "ctp500", shell_output("#{libexec}/ctp500")
   end
 end
