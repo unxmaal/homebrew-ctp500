@@ -1,7 +1,7 @@
 class Ctp500Printer < Formula
   desc "CUPS backend for the CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
-  url "https://github.com/unxmaal/ctp500-macos-cli/archive/refs/tags/v1.4.2.tar.gz"
+  url "https://github.com/unxmaal/ctp500-macos-cli/archive/refs/tags/v1.4.3.tar.gz"
   sha256 "5ea2a6c8206e634420a19263edf4326ef15f93e1e83aa86032ed12001c62de58"
   license "MIT"
 
@@ -59,4 +59,3 @@ class Ctp500Printer < Formula
     assert_match "ctp500", shell_output("#{libexec}/ctp500")
   end
 end
-
