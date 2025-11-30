@@ -1,8 +1,8 @@
 class Ctp500Printer < Formula
   desc "CUPS backend for the CTP500 BLE thermal receipt printer"
   homepage "https://github.com/unxmaal/ctp500-macos-cli"
-  url "https://github.com/unxmaal/ctp500-macos-cli/archive/refs/tags/v1.4.0.tar.gz"
-  sha256 "685416ce215eaa407640ea35fbf585f3ce2be1100c86e9da47d9c086680bbf2c"
+  url "https://github.com/unxmaal/ctp500-macos-cli/archive/refs/tags/v1.4.1.tar.gz"
+  sha256 "6c36a04bc21be2add1f0e76a2cb870589fb49a073390e0999d7fbf97ad00341b"
   license "MIT"
 
   depends_on :macos
@@ -28,11 +28,12 @@ class Ctp500Printer < Formula
       CUPS backend setup
       ==================
 
-      To enable the CTP500 backend for CUPS:
+      To enable the CTP500 backend for CUPS (copy, not symlink, due to AMFI):
 
-        sudo ln -sf #{opt_prefix}/libexec/ctp500 /usr/libexec/cups/backend/ctp500
+        sudo cp #{opt_prefix}/libexec/ctp500 /usr/libexec/cups/backend/ctp500
         sudo chown root:_lp /usr/libexec/cups/backend/ctp500
         sudo chmod 755 /usr/libexec/cups/backend/ctp500
+        sudo xattr -c /usr/libexec/cups/backend/ctp500
         sudo launchctl kickstart -k system/org.cups.cupsd
 
       Add the printer (replace BLE-ADDRESS with your printer's UUID or MAC):
